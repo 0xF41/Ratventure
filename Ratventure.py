@@ -1,18 +1,22 @@
-from os import system, path, listdir, walk
 import random
 import pickle
+import os
+import csv
 
 
-# Map object to generate the map for the game session
+# Map Class to generate the map for the game session
 
 
 class Map():
     def __init__(self):
+        # Static variables
         self.TOWNS_MAX_NUM = 5  # Number of towns
         self.GRID_LENGTH = 8  # Map Size
 
-        # Static Coordinates (Orb, Rat King)
+        # Initialize self.orb_coordinate with (0, 0) which will be updated later
         self.orb_coordinate = (0, 0)
+
+        # Static Coordinates (Orb, Rat King)
         self.RAT_KING = (self.GRID_LENGTH - 1, self.GRID_LENGTH - 1)
 
         self.generate_map_objects()  # generate coordinates of map objects
@@ -30,7 +34,7 @@ class Map():
 
     # Generate towns " T " on grid
     def generate_town_tile_coords(self):
-        self.towns.append((0, 0))
+        self.towns.append((0, 0))  # Top Left Town
         while len(self.towns) != self.TOWNS_MAX_NUM:
             town_coord = self.generate_coord()
             if town_coord not in self.towns and town_coord != self.RAT_KING:
@@ -102,7 +106,7 @@ class Weapon:
         self.damage = damage
         self.defence = defence
 
-# Creatures consists of Players and Enemies
+# Creature Class consists of Player and Enemy (Child Classes)
 
 
 class Creature():
@@ -177,14 +181,14 @@ class Creature():
         return random.randint(self.damage[0], self.damage[1])
 
     def deal_damage(self, creature) -> int:
-        '''Returns damage to deal to creature'''
+        '''Deals damage to creature and returns damage to dealt to creature'''
         if (isinstance(creature, Creature)):
             damage_to_deal = self.attack_dmg() - creature.defence
             # Ensure damage for self to deal to creature does not go below zero
             if damage_to_deal < 0:
                 damage_to_deal = 0
         else:
-            print("Error: {creature} is not a member from the Creature class")
+            print(f"Error: {creature} is not a member from the Creature class")
         # Deduct creature's HP
         creature.lose_HP(damage_to_deal)
         return damage_to_deal
@@ -201,12 +205,12 @@ class Creature():
         self.HP -= by
 
 
-# Player class for each player who plays the game
+# Player Class for current player who plays the game
 
 
 class Player(Creature):
     def __init__(self, name="The Hero"):
-        super().__init__(name, [2, 4], 1, 20)
+        super().__init__(name, [2, 4], 1, 25)
 
         self.coordinate = [0, 0]  # row, column
         self.day = 1
@@ -218,7 +222,6 @@ class Player(Creature):
         self.gold = 0  # Store currency
         self.experience = 0
 
-    # Overwrites parent class display_stat()
     def __str__(self):
         '''Display player's statistics, indicates if player is holding the orb of power only if the player has already found it'''
         string = "\n"
@@ -232,7 +235,7 @@ class Player(Creature):
         return string
 
     def sense_orb(self, map_obj: Map):
-        '''Detects if the player's coordinates is on the power of orb. Prints stuff'''
+        '''Detects if the player's coordinates is on the power of orb. Prints stuff. If not on orb, print direction'''
         self.day += 1  # Action of sensing orb takes one day
         if tuple(self.coordinate) == map_obj.orb_coordinate:
             if not self.has_orb:
@@ -261,7 +264,6 @@ class Player(Creature):
             direction += "north"
         elif self.coordinate[0] < map_obj.orb_coordinate[0]:
             direction += "south"
-
         if self.coordinate[1] > map_obj.orb_coordinate[1]:
             direction += "west"
         elif self.coordinate[1] < map_obj.orb_coordinate[1]:
@@ -319,7 +321,7 @@ class Player(Creature):
                 return user_input
 
 
-# Enemy class for enemies the player encounters in combat (including the boss)
+# Enemy Class for enemies the player encounters in combat (including the boss)
 
 
 class Enemy(Creature):
@@ -340,21 +342,34 @@ class Enemy(Creature):
             self.set_creature_defence(1000000)
         else:
             # Reverts original defence
-            self.defence = self.original_defence
+            self.set_creature_defence(self.original_defence)
 
     # Returns an enemy object
     @ staticmethod
-    def create_enemy(name):
+    def create_enemy(name="Rat", random_enemy=False):
         '''Returns an enemy object'''
         # TODO: Generate more random stats
-        if name == "Rat":
-            return Enemy("Rat", [1, 3], 1, 10)
-        elif name == "Rat King":
-            return Enemy("Rat King", [6, 8], 5, 20, is_boss=True)
+        if not random_enemy:
+            if name == "Rat":
+                return Enemy("Rat", [1, 3], 1, 10)
+            elif name == "Rat King":
+                return Enemy("Rat King", [6, 8], 5, 20, is_boss=True)
+        else:
+            enemy_int = random.randint(1, 5)
+            if enemy_int == 1:
+                return Enemy("Rat", [1, 3], 1, 10)
+            elif enemy_int == 2:
+                return Enemy("Rat Minion", [2, 4], 1, 6)
+            elif enemy_int == 3:
+                return Enemy("Rat Golem", [1, 2], 3, 15)
+            elif enemy_int == 4:
+                return Enemy("Rat Wizard", [0, 5], 1, 8)
+            elif enemy_int == 5:
+                return Enemy("Rat Villager", [1, 2], 1, 7)
 
 
 class Menu:
-
+    # Menu Class Could be optimized
     @staticmethod
     def menu_text(menu_name, custom_list=[], custom_pre_text=""):
         '''
@@ -372,7 +387,8 @@ class Menu:
         text -> the current menu text
         value -> the number of entries in the current menu text
         '''
-        main_menu_list = ["New Game", "Resume Game", "Exit Game"]
+        main_menu_list = ["New Game", "Resume Game",
+                          "Exit Game", "Leaderboard"]
         town_menu_list = ["View Character", "View Map",
                           "Move", "Rest", "Save Game", "Exit Game"]
         combat_menu_list = ["Attack", "Run"]
@@ -417,28 +433,83 @@ class Menu:
         return user_input
 
 
+class LeaderBoard:
+    def __init__(self):
+        self.leaderboard_entries = []
+        self.max_leaderboard_entries = 5
+        self.empty_placeholder_string = "<EMPTY>"
+        self.empty_placeholder_day = 1000000000
+
+    def __str__(self):
+        string = f"Leaderboard (Top {self.max_leaderboard_entries} Players)\n"
+        string += "-" * (len(string) - 1) + "\n"
+        if self.leaderboard_entries:
+            for num, entry in enumerate(self.leaderboard_entries[0:self.max_leaderboard_entries], 1):
+                string += f"{num}) {entry[0]}"
+                if entry[1] != self.empty_placeholder_day:
+                    string += f" ({entry[1]} days)"
+                string += "\n"
+            return string
+        else:
+            return "The leaderboard is empty."
+
+    def refresh_leaderboard(self, remove_duplicates=True):
+        '''Update leaderboard with entries from leaderboard.csv file'''
+        with open("leaderboard.csv", "r") as csv_file:
+            csv_reader = csv.reader(csv_file)
+            next(csv_reader)
+            for line in csv_reader:
+                line[1] = int(line[1])  # Convert string to int
+                self.leaderboard_entries.append(
+                    tuple(line))  # Append tuple to list
+        if remove_duplicates:
+            self.leaderboard_entries = list(
+                set(self.leaderboard_entries))  # Remove duplicate entries in leaderboard
+        while len(self.leaderboard_entries) < self.max_leaderboard_entries:
+            self.leaderboard_entries.append(
+                (self.empty_placeholder_string, self.empty_placeholder_day))
+
+    def sort_leaderboard_entry(self):
+        '''Sort self.leaderboard_entries by increasing days'''
+        self.leaderboard_entries.sort(
+            key=lambda item: item[1])  # Sort by days
+
+    def add_new_entry(self, player_obj: Player):
+        '''Adds a new entry into the leaderboard.csv after player has won the game'''
+        with open("leaderboard.csv", "a", newline="") as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow([str(player_obj.name), int(player_obj.day)])
+
+
 class Ratventure:
 
     def __init__(self):
-        self.new_game = True  # False if player loads game
+        self.new_game = True  # Flag becomes False if player loads game
         self.save_file_pwd = ""
+        self.save_file_extension = ".pkl"  # custom extension for pickle object files
+        # Create LeaderBoard object when updating/showing leaderboard
+        self.leaderboard = LeaderBoard()
 
     def start_game(self):
-        in_main_menu = True
-        while in_main_menu:
-            in_main_menu = self.main_menu()
-        Ratventure.enter_to_continue()
+        game_loop = True
+        while game_loop:
+            in_main_menu = True
+            while in_main_menu:
+                in_main_menu = self.main_menu()
+            Ratventure.enter_to_continue()
 
-        is_detecting_tile = True
-        while is_detecting_tile:
-            self.detect_tile()
+            is_detecting_tile = True
+            while is_detecting_tile:
+                is_detecting_tile = self.detect_tile()
 
     def main_menu(self):
+        '''Returns True if player is still in main menu'''
         Ratventure.clear_output()
         user_input = Menu.choose_choice(Menu.menu_text("main"))
         if user_input == 1:
             # Start game. Create Player and Map object
-            self.player = Player()
+            self.player_name = input("Enter your name: ")
+            self.player = Player(name=self.player_name)
             self.map = Map()
             return False
         elif user_input == 2:
@@ -448,10 +519,11 @@ class Ratventure:
                 return True
         elif user_input == 3:
             # Quit Game
-            self.quit_game()
+            Ratventure.quit_game()
         elif user_input == 4:
             # Leaderboard
-            pass
+            self.show_leaderboard()
+            return True
         else:
             # Future options
             pass
@@ -459,16 +531,22 @@ class Ratventure:
 
     # >>> Detecting tile functions
     def detect_tile(self):
+        '''
+        Checks which tile the player is standing on, and execute methods related to the related tile
+        Returns True if the function of detecting_tile continues
+        '''
         if tuple(self.player.coordinate) in self.map.towns:
-            self.on_map_tile()
+            self.on_town_tile()
         elif tuple(self.player.coordinate) not in self.map.towns and tuple(self.player.coordinate) != self.map.RAT_KING:
             self.on_open_tile()
         elif tuple(self.player.coordinate) == self.map.RAT_KING:
-            self.on_rat_king_tile()
+            return self.on_rat_king_tile()
         else:
             print("Error: Unknown tile")
+        return True
 
-    def on_map_tile(self):
+    def on_town_tile(self):
+        '''Events when player's coordinate is updated to a Town tile (i.e. standing on a T)'''
         # ==== TOWN (T) ====
         in_town = True
         while in_town == True:
@@ -498,13 +576,14 @@ class Ratventure:
                 pass
             elif user_input == 6:
                 # Exit Game
-                exit()  # Exits game
+                Ratventure.quit_game()
                 pass
             Ratventure.enter_to_continue()
 
-    def on_open_tile(self, enemy_obj_arg=Enemy.create_enemy("Rat")):
+    def on_open_tile(self):
         # ==== OPEN TILE ====
-        enemy_obj = enemy_obj_arg
+        # Spawn an enemy object on open tiles
+        enemy_obj = Enemy.create_enemy(random_enemy=True)
         in_outdoor = True
         while in_outdoor:
             # Combat occurs in open tile. Enters combat with the rat enemy
@@ -530,17 +609,29 @@ class Ratventure:
                 self.player.sense_orb(self.map)
             elif user_input == 5:
                 # Exit game
-                exit(0)
+                Ratventure.quit_game()
             Ratventure.enter_to_continue()
 
     def on_rat_king_tile(self):
+        '''Returns False if the rat king is defeated to stop detect_tile()'''
         # ==== RAT KING (K) ====
         # Spawns a rat king enemy when self.player is on K tile
         enemy_obj_king = Enemy.create_enemy("Rat King")
-        self.on_open_tile(enemy_obj_arg=enemy_obj_king)
+        self.combat(enemy_obj_king)
         if not enemy_obj_king.alive_status():
-            print("Congratulations! You have defeated the Rat King.")
-            # TODO: Leaderboard
+            self.game_finish()
+            return False
+        else:
+            return True
+
+    def game_finish(self):
+        print("+==================================================+")
+        print("| Congratulations! You have defeated the Rat King. |")
+        print("+==================================================+")
+        # Add player to leaderboard.csv
+        self.leaderboard.add_new_entry(player_obj=self.player)
+        self.show_leaderboard()
+        print("====================================================")
 
     # >>> Game Combat Functions
     def combat(self, enemy_obj: Enemy):
@@ -597,7 +688,7 @@ class Ratventure:
         # Combat Lose Conditon
         if not self.player.alive_status():
             print("You lose :(")
-            exit(0)
+            Ratventure.enter_to_continue()
 
     def combat_player_run(self, enemy_obj):
         print("You run and hide.")
@@ -615,10 +706,10 @@ class Ratventure:
             enemy_obj.immune(is_immune=False)
 
     # >>> Saving and loading games
-    def create_save_file_pwd(self, file_name="ratventure_save.pkl"):
+    def create_save_file_pwd(self, file_name):
         '''Learns the pwd of the save file (file_name) used for the game'''
         self.save_file = file_name
-        self.dir_path = path.dirname(path.realpath(__file__))
+        self.dir_path = os.path.dirname(os.path.realpath(__file__))
         pwd_save_file = f"{self.dir_path}/{self.save_file}"
         return pwd_save_file
 
@@ -632,21 +723,22 @@ class Ratventure:
                 print("Your current game does not have a save file! Save your game!")
             # Input for new save file name or current save name
             if self.new_game:
-                file_name = input("Enter new file name (.pkl): ")
+                file_name = input(
+                    f"Enter new file name ({self.save_file_extension}): ")
             else:
                 file_name = input(
                     f"Enter file name (by default save to {self.save_file}): ")
                 if not file_name:
                     file_name = self.save_file
             # Check if file_name ends with .pkl, else add .pkl extension
-            if file_name[-4:] != ".pkl":
-                file_name += ".pkl"
+            if file_name[-len(self.save_file_extension):] != self.save_file_extension:
+                file_name += self.save_file_extension
             # Check if player is overwriting another save file that is not his current loaded save file
-            if path.exists(self.create_save_file_pwd(file_name)) and self.save_file_pwd != self.create_save_file_pwd(file_name):
+            if os.path.exists(self.create_save_file_pwd(file_name)) and self.save_file_pwd != self.create_save_file_pwd(file_name):
                 overwrite = input(
                     f"WARNING: {self.create_save_file_pwd(file_name)} already exists. Overwrite save file {self.save_file_pwd}? (y/n) ")
                 if overwrite.lower() == "y":
-                    # Confirm overwrite another save file
+                    # Confirm overwrite another save file and update new save file
                     self.save_file_pwd = self.create_save_file_pwd(file_name)
                     break
                 else:
@@ -662,7 +754,8 @@ class Ratventure:
             pickle.dump(pickle_list, new_save)
 
         if self.new_game:
-            self.new_game = False  # Saved game means that currently its not a new game anymore
+            # Saved game means that currently its not a new game anymore as player is playing from a save file
+            self.new_game = False
         print(f"Game has been saved as {self.save_file}.")
 
     # save_file_pwd property
@@ -677,19 +770,19 @@ class Ratventure:
         self._save_file_pwd = pwd
 
     @ staticmethod
-    def find_file_match_in_dir(string, path):
-        ''' Finds files with (string) in script directory'''
+    def find_file_suffix_in_dir(suffix, path):
+        ''' Finds files with ending with (suffix) extension in script directory'''
         result = []
-        for root, dirs, files in walk(path):
+        for root, dirs, files in os.walk(path):
             for file in files:
-                if string in file:
+                if file.endswith(suffix):
                     result.append(file)
         return result
 
     def load_game(self) -> bool:
         '''Returns True if the game is loaded successfully'''
-        save_file_list = Ratventure.find_file_match_in_dir(
-            ".pkl", path.dirname(path.realpath(__file__)))
+        save_file_list = Ratventure.find_file_suffix_in_dir(
+            self.save_file_extension, os.path.dirname(os.path.realpath(__file__)))
         if not self.show_save_files():
             print("There are no save files found!")
         else:
@@ -713,10 +806,10 @@ class Ratventure:
     def show_save_files(self):
         '''
         Return True if the save files are shown (i.e. There are save files).
-        Sets self.save_file_count which represents number of save files.
+        Sets self.save_file_count which represents number of save files the game has currently.
         '''
-        save_file_list = Ratventure.find_file_match_in_dir(
-            ".pkl", path.dirname(path.realpath(__file__)))
+        save_file_list = Ratventure.find_file_suffix_in_dir(
+            self.save_file_extension, os.path.dirname(os.path.realpath(__file__)))
         if save_file_list:
             print("Save Files List:")
             for index, save_file in enumerate(save_file_list, 1):
@@ -727,20 +820,28 @@ class Ratventure:
             return False
 
     # Quit Game
-    def quit_game(self):
+    @ staticmethod
+    def quit_game():
+        print("Thanks for playing!")
         exit(0)
 
+    # Leaderboard
+    def show_leaderboard(self):
+        self.leaderboard.refresh_leaderboard()
+        self.leaderboard.sort_leaderboard_entry()
+        print(self.leaderboard)
+        Ratventure.enter_to_continue()
+
     # Other functions
-    @staticmethod
+    @ staticmethod
     def enter_to_continue(text="Enter to continue..."):
         '''clears teminal'''
-        print()
-        input(text)
+        input("\n" + text)
         Ratventure.clear_output()
 
-    @staticmethod
+    @ staticmethod
     def clear_output():
-        system("clear")
+        os.system('cls' if os.name == 'nt' else 'clear')
 
 
 def main():
