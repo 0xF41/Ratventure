@@ -101,10 +101,16 @@ class Map():
 
 
 class Weapon:
-    def __init__(self, name, damage, defence):
+    def __init__(self, name, damage, defence, cost):
         self.name = name
         self.damage = damage
         self.defence = defence
+        self.cost = cost
+
+    @staticmethod
+    def create_weapon(name):
+        if name == "Iron Sword":
+            return Weapon(name, 2, 0, 10)
 
 # Creature Class consists of Player and Enemy (Child Classes)
 
@@ -240,7 +246,7 @@ class Player(Creature):
         if tuple(self.coordinate) == map_obj.orb_coordinate:
             if not self.has_orb:
                 print("You found the orb of power!")
-                orb_of_power = Weapon("Orb of Power", 5, 5)
+                orb_of_power = Weapon("Orb of Power", 5, 5, 0)
                 self.weapons.append(orb_of_power)
                 self.add_stat_damage(orb_of_power.damage)
                 print(f"Your attack increases by {orb_of_power.damage}!")
@@ -459,7 +465,6 @@ class LeaderBoard:
             csv_reader = csv.reader(csv_file)
             next(csv_reader)
             for line in csv_reader:
-                line[1] = int(line[1])  # Convert string to int
                 self.leaderboard_entries.append(
                     tuple(line))  # Append tuple to list
         if remove_duplicates:
@@ -472,13 +477,40 @@ class LeaderBoard:
     def sort_leaderboard_entry(self):
         '''Sort self.leaderboard_entries by increasing days'''
         self.leaderboard_entries.sort(
-            key=lambda item: item[1])  # Sort by days
+            key=lambda item: int(item[1]))  # Sort by days
 
     def add_new_entry(self, player_obj: Player):
         '''Adds a new entry into the leaderboard.csv after player has won the game'''
         with open("leaderboard.csv", "a", newline="") as csv_file:
             csv_writer = csv.writer(csv_file)
             csv_writer.writerow([str(player_obj.name), int(player_obj.day)])
+
+
+# class Shop:
+#     def __init__(self):
+#         self.shop_menu_list = [("Iron Sword", 10)]
+
+#     @ staticmethod
+#     def display_shop(shop_menu: list):
+#         print("SHOP\n====")
+#         for index, item in shop_menu:
+#             print(f"{index}, {item[0]} ({item[1] gold})")
+
+#     def get_option(self):
+#         user_input = 0
+#         while user_input in range(1, len(self.shop_menu_list) + 1):
+#             user_input = input("Choose option: ")
+#         return user_input
+
+#     def buy_item(self, option, player_obj: Player):
+#         user_input = input(
+#             f"Buy {self.shop_menu_list[option - 1][0]} for {self.shop_menu_list[option -1][1]} gold? (y/n)")
+#         if user_input.lower() == 'y':
+#             player_obj.gold -= self.shop_menu_list[option - 1][1]
+#             self.recieve_item(player_obj, self.shop_menu_list[option - 1][0])
+
+#     def recieve_item(self, player_obj: Player, item_name):
+#         player_obj.weapons.append(Weapon.create_weapon(item_name))
 
 
 class Ratventure:
